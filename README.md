@@ -11,6 +11,7 @@ Run several Roblox accounts at the same time, from one clean launcher.
 - **Mini viewer** - tiny live previews of every game, at any size (Roblox's own window won't go that small). The real windows stay running off-screen.
   - Hover a preview → that game pops up beside the viewer as the active window, so you can check on it.
   - Click → keep it out and play. Right-click → tuck it away.
+- **Discord stats** - if your macro posts match results to a Discord channel (webhook), MultiBlox reads that channel with your own bot and tallies **victories, losses and win rate per account**, plus every **drop** added up. Click an account to expand its drop totals and recent matches.
 - **Anti-AFK** - every few minutes, briefly un-hides each game, clicks it, and hides it again so you don't get idle-kicked.
 - **Power saver** - lower Roblox's CPU priority, trim its RAM, limit CPU cores, and launch at low FPS.
 - **FPS editor** - set the frame-rate cap new games launch with (presets up to unlimited).
@@ -24,6 +25,17 @@ Run several Roblox accounts at the same time, from one clean launcher.
 4. Tick accounts and press **Launch all checked**.
 
 > **"Windows protected your PC"?** That appears for any app that isn't from a big publisher. Click **More info → Run anyway**.
+
+## Discord stats setup
+
+A webhook can only *post* to a channel, so MultiBlox reads the channel with a small bot you create (read-only, takes ~3 minutes):
+
+1. [Discord Developer Portal](https://discord.com/developers/applications) → **New Application** → **Bot** → **Reset Token** → copy it. On the same page turn on **Message Content Intent** and save.
+2. **OAuth2 → URL Generator** → tick `bot`, then **View Channels** and **Read Message History** → open the link and add the bot to your server.
+3. In Discord: **Settings → Advanced → Developer Mode** on. Right-click the channel your macro posts to → **Copy Channel ID**.
+4. MultiBlox → **Discord Stats** → paste the token and channel ID → **Connect**. The last 100 results are imported, then new ones are checked every 20 seconds.
+
+It reads the user, Victory/Defeat, and the `+N Item` lines under **Rewards** (units are ignored). The bot token is stored encrypted like your logins and only sent to `discord.com`.
 
 ## Is my login safe?
 

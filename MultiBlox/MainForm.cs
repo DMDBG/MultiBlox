@@ -81,6 +81,7 @@ public partial class MainForm : Form
         cfg.SaverFps = (int)numSaverFps.Value;
         cfg.FpsCap = (int)numFps.Value;
         cfg.FpsAutoApply = chkFpsAuto.Checked;
+        if (chkDiscord != null) cfg.DiscordEnabled = chkDiscord.Checked;
         try { cfg.Save(); saveWarned = false; }
         catch (Exception ex)
         {
@@ -235,6 +236,7 @@ public partial class MainForm : Form
             lvAccounts.Items.Add(it);
         }
         lvAccounts.EndUpdate();
+        RebuildAccountCards();   // keep the Discord Stats page in sync with the account list
     }
 
     void SetStatus(Account a, string status)

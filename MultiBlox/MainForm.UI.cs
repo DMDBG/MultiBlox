@@ -43,6 +43,7 @@ public partial class MainForm
 
         AddPage("accounts", "Accounts", "Add your accounts and launch them into a game", "", BuildAccountsPage());
         AddPage("instances", "Instances & Viewer", "Every Roblox window that's open right now", "", BuildInstancesPage());
+        AddPage("discord", "Discord Stats", "Wins, losses and drops from your macro's webhooks", "", BuildDiscordPage());
         AddPage("afk", "Anti-AFK & Saver", "Stay in game while away, and keep your PC cool", "", BuildAfkSaverPage());
         AddPage("fps", "FPS Editor", "Set the frame-rate cap Roblox launches with", "", BuildFpsPage());
         ResumeLayout(false);
@@ -58,6 +59,7 @@ public partial class MainForm
             var arg = Environment.GetCommandLineArgs().FirstOrDefault(a => a.StartsWith("--page="));
             ShowPage(arg != null && pages.ContainsKey(arg[7..]) ? arg[7..] : "accounts");
             RefreshAccounts();
+            StartDiscord();
             UpdateStats();
             refreshTimer.Start();
             if (cfg.SaverEnabled) chkSaver.Checked = true;
@@ -163,9 +165,15 @@ public partial class MainForm
             int w = p.ClientSize.Width - 4;
             foreach (Control c in p.Controls)
             {
-                var s = new Size(Math.Max(200, w - c.Margin.Horizontal), 0);
-                c.MinimumSize = s;
-                c.MaximumSize = s;
+                int cw = Math.Max(200, w - c.Margin.Horizontal);
+                if (c.AutoSize)
+                {
+                    // Auto-sizing cards: pin the width, let the height follow the content.
+                    var s = new Size(cw, 0);
+                    c.MinimumSize = s;
+                    c.MaximumSize = s;
+                }
+                else c.Width = cw;   // fixed-height items (e.g. stat tiles) keep their height
             }
         }
         p.ClientSizeChanged += (_, _) => Fit();

@@ -32,6 +32,11 @@ public class AppConfig
     public bool SaverLowFps { get; set; } = true;
     public int SaverFps { get; set; } = 20;
 
+    public string DiscordTokenEnc { get; set; } = "";   // DPAPI-encrypted bot token
+    public string DiscordChannelId { get; set; } = "";
+    public string DiscordChannelName { get; set; } = "";
+    public bool DiscordEnabled { get; set; }
+
     public int FpsCap { get; set; } = 60;
     public bool FpsAutoApply { get; set; } = true;
 
