@@ -82,6 +82,14 @@ public partial class MainForm : Form
         cfg.FpsCap = (int)numFps.Value;
         cfg.FpsAutoApply = chkFpsAuto.Checked;
         if (chkDiscord != null) cfg.DiscordEnabled = chkDiscord.Checked;
+        if (chkRejoin != null) cfg.AutoRejoin = chkRejoin.Checked;
+        if (txtAlertItems != null)
+        {
+            cfg.AlertItems = txtAlertItems.Text.Trim();
+            cfg.AlertWebhook = txtAlertHook.Text.Trim();
+            cfg.AlertMention = txtAlertMention.Text.Trim();
+            cfg.AlertSound = chkAlertSound.Checked;
+        }
         try { cfg.Save(); saveWarned = false; }
         catch (Exception ex)
         {
@@ -202,6 +210,7 @@ public partial class MainForm : Form
         {
             try
             {
+                StopSession(p.Id);
                 p.Kill();
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
                 await p.WaitForExitAsync(cts.Token);
@@ -339,13 +348,29 @@ public partial class MainForm : Form
         }
     }
 
-    async Task LaunchAccount(Account a)
+    /// <param name="fixedTarget">Used by auto-rejoin to go back to exactly the same game/server; otherwise the boxes on screen are used.</param>
+    async Task LaunchAccount(Account a, ServerTarget fixedTarget = null)
     {
-        string placeText = string.IsNullOrWhiteSpace(a.PlaceId) ? txtPlace.Text.Trim() : a.PlaceId.Trim();
-        if (!long.TryParse(placeText, out long placeId))
+        ServerTarget target = fixedTarget;
+        string cookie;
+        try { cookie = Dpapi.Unprotect(a.EncCookie); }
+        catch { SetStatus(a, "✖ Saved login unreadable - re-add this account"); return; }
+
+        if (target == null)
         {
-            Log("Enter a Place ID first (the number in the game's URL: roblox.com/games/<PlaceID>/...).");
-            return;
+            // Account's own place override wins; otherwise the Place ID box, or the place inside a pasted server link.
+            bool overridden = !string.IsNullOrWhiteSpace(a.PlaceId);
+            string server = overridden ? "" : txtJob.Text.Trim();
+            long.TryParse(overridden ? a.PlaceId.Trim() : txtPlace.Text.Trim(), out long placeId);
+            if (placeId == 0) placeId = RobloxApi.PlaceFromLink(server);
+            bool shareLink = server.Contains("share?code=", StringComparison.OrdinalIgnoreCase);
+            if (placeId == 0 && !shareLink)
+            {
+                Log("Enter a Place ID first (the number in the game's URL: roblox.com/games/<PlaceID>/...).");
+                return;
+            }
+            try { target = await RobloxApi.ResolveServerAsync(cookie, server, placeId); }
+            catch (Exception ex) { SetStatus(a, "✖ " + ex.Message); Log($"[{a.Name}] {ex.Message}"); return; }
         }
 
         int fps = chkSaver.Checked && chkSaverFps.Checked ? (int)numSaverFps.Value
@@ -355,13 +380,13 @@ public partial class MainForm : Form
         try
         {
             SetStatus(a, "Getting ticket...");
-            string ticket = await RobloxApi.GetAuthTicketAsync(Dpapi.Unprotect(a.EncCookie));
+            string ticket = await RobloxApi.GetAuthTicketAsync(cookie);
             // Remember which Roblox game windows already exist. The new game is whichever window appears next -
             // even if Roblox reuses a leftover background process (it often keeps one alive after you close a game).
             var windowsBefore = RobloxWindowMap().Keys.ToHashSet();
-            Process.Start(new ProcessStartInfo(RobloxApi.BuildLaunchUri(ticket, placeId, a.PlaceId == "" ? txtJob.Text : "")) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(RobloxApi.BuildLaunchUri(ticket, target)) { UseShellExecute = true });
             SetStatus(a, "Launching...");
-            Log($"[{a.Name}] launching place {placeId}" + (fps > 0 ? $" at {fps} FPS" : ""));
+            Log($"[{a.Name}] launching {target}" + (fps > 0 ? $" at {fps} FPS" : ""));
 
             for (int i = 0; i < 90; i++)
             {
@@ -370,6 +395,7 @@ public partial class MainForm : Form
                 if (fresh != 0)
                 {
                     pidOwner[fresh] = a.Name;   // overwrite: a reused process now belongs to this account
+                    TrackSession(fresh, a, target);   // for auto-rejoin
                     SetStatus(a, $"Running (PID {fresh})");
                     Log($"[{a.Name}] window opened (PID {fresh}).");
                     if (chkAfk.Checked && chkAfkMin.Checked)
@@ -500,6 +526,7 @@ public partial class MainForm : Form
     {
         foreach (int pid in pids)
         {
+            StopSession(pid);   // closed on purpose - don't auto-rejoin it
             try { using var p = Process.GetProcessById(pid); p.Kill(); Log($"Closed PID {pid}."); }
             catch (Exception ex) { Log($"Couldn't close {pid}: {ex.Message}"); }
         }

@@ -10,6 +10,9 @@ public partial class MainForm
     FlowLayoutPanel discordPage;
     StatTile tWins, tLosses, tRate, tMatches;
     readonly HashSet<string> expanded = new(StringComparer.OrdinalIgnoreCase);
+    Label accountsLabel;
+
+    static Label SectionLabel(string t) => new() { Text = t, AutoSize = true, Font = Theme.SmallBold, ForeColor = Theme.Muted, Margin = new Padding(4, 8, 0, 8) };
     readonly List<Control> accountCards = new();
     readonly System.Windows.Forms.Timer discordTimer = new() { Interval = 20000 };
     bool polling;
@@ -39,8 +42,8 @@ public partial class MainForm
         txtBotToken = new TextBox { UseSystemPasswordChar = true, PlaceholderText = haveToken ? "Saved ✓ - paste a new one to replace" : "Paste your bot token" };
         txtChannel = new TextBox { Text = cfg.DiscordChannelId, PlaceholderText = "e.g. 1234567890123456789" };
         setup.Controls.Add(Row(
-            Labeled("Bot token", Field(txtBotToken, 280)),
-            Labeled("Webhook channel ID", Field(txtChannel, 210)),
+            Labeled("Bot token", Field(txtBotToken, 240)),
+            Labeled("Webhook channel ID", Field(txtChannel, 200)),
             InlineBtn("Connect", async (_, _) => await ConnectDiscord(), BtnKind.Primary),
             InlineBtn("Check now", async (_, _) => await PollDiscord(true))));
         chkDiscord = new Toggle("Keep checking for new results (every 20 seconds)", cfg.DiscordEnabled);
@@ -77,9 +80,16 @@ public partial class MainForm
                 RebuildAccountCards();
             }, BtnKind.Danger)));
 
+        // Order: totals · chart · goals · ACCOUNTS (cards inserted here) · SETTINGS · setup · alerts
         page.Controls.Add(totalsBox);
+        page.Controls.Add(BuildChartCard());
+        page.Controls.Add(BuildGoalsCard());
+        accountsLabel = SectionLabel("ACCOUNTS  ·  click one to see its drops");
+        page.Controls.Add(accountsLabel);
+        page.Controls.Add(SectionLabel("SETTINGS"));
         page.Controls.Add(setup);
-        page.Controls.Add(new Label { Text = "ACCOUNTS  ·  click one to see its drops", AutoSize = true, Font = Theme.SmallBold, ForeColor = Theme.Muted, Margin = new Padding(4, 4, 0, 8) });
+        page.Controls.Add(BuildAlertsCard());
+        if (!haveToken) page.Controls.SetChildIndex(setup, 1);   // first time: setup goes right at the top
 
         discordTimer.Tick += async (_, _) => await PollDiscord(false);
         return page;
@@ -142,6 +152,7 @@ public partial class MainForm
         try
         {
             if (stats.ChannelId != channel) stats = new StatsStore { ChannelId = channel };   // different channel = fresh tally
+            bool firstImport = string.IsNullOrEmpty(stats.LastMessageId);   // don't fire alerts for old history
             var msgs = await new DiscordReader(token, channel).FetchNewAsync(stats.LastMessageId);
             int added = 0, blank = 0;
             foreach (var m in msgs)
@@ -152,7 +163,11 @@ public partial class MainForm
                     var (user, match) = r.Value;
                     int before = stats.User(user).Matches;
                     stats.Add(user, match);
-                    if (stats.User(user).Matches > before) added++;
+                    if (stats.User(user).Matches > before)
+                    {
+                        added++;
+                        if (!firstImport) CheckAlerts(user, match);
+                    }
                 }
                 else if (IsBlank(m)) blank++;
             }
@@ -202,16 +217,22 @@ public partial class MainForm
             var card = new AccountStatsCard(u, expanded.Contains(name), cfg.Accounts.Any(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
             card.Toggled += open => { if (open) expanded.Add(name); else expanded.Remove(name); };
             accountCards.Add(card);
-            discordPage.Controls.Add(card);
         }
         if (names.Count == 0)
         {
             var empty = new Card();
             empty.Controls.Add(Note("No results yet. Once your macro posts a match result to the channel, each account shows up here."));
             accountCards.Add(empty);
-            discordPage.Controls.Add(empty);
+        }
+        // Insert the cards right under the ACCOUNTS heading (settings stay below them).
+        int at = discordPage.Controls.GetChildIndex(accountsLabel) + 1;
+        for (int i = 0; i < accountCards.Count; i++)
+        {
+            discordPage.Controls.Add(accountCards[i]);
+            discordPage.Controls.SetChildIndex(accountCards[i], at + i);
         }
         discordPage.ResumeLayout();
+        RefreshInsights();
 
         int w = stats.Users.Values.Sum(u => u.Wins), l = stats.Users.Values.Sum(u => u.Losses);
         tWins.Value = w.ToString("N0");
@@ -260,7 +281,7 @@ class AccountStatsCard : Card
         chips = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Margin = new Padding(0, 0, 0, 6) };
         if (u.Drops.Count == 0) chips.Controls.Add(new Label { Text = "No drops recorded yet.", AutoSize = true, ForeColor = Theme.Muted });
         foreach (var kv in u.Drops.OrderByDescending(kv => kv.Value))
-            chips.Controls.Add(new Chip(kv.Key, kv.Value));
+            chips.Controls.Add(new Chip(kv.Key, kv.Value, Rates.PerHour(u.Recent, kv.Key)));
         details.Controls.Add(chips);
 
         details.Controls.Add(Caption("RECENT MATCHES"));
@@ -365,17 +386,19 @@ class AccountStatsCard : Card
         }
     }
 
-    /// <summary>"Summer Pearls  27,390" badge.</summary>
+    /// <summary>"Summer Pearls  27,390  5.4k/hr" badge (rate based on the last 24h).</summary>
     class Chip : Control
     {
-        readonly string item, amount;
-        public Chip(string item, double amount)
+        readonly string item, amount, rate;
+        public Chip(string item, double amount, double perHour)
         {
             this.item = item;
             this.amount = amount >= 1_000_000 ? $"{amount / 1_000_000:0.##}M" : amount.ToString("N0");
+            rate = perHour > 0 ? Rates.Short(perHour) + "/hr" : "";
             Margin = new Padding(0, 0, 8, 8);
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-            int w = TextRenderer.MeasureText(item, Theme.Body).Width + TextRenderer.MeasureText(this.amount, Theme.Semi).Width + 34;
+            int w = TextRenderer.MeasureText(item, Theme.Body).Width + TextRenderer.MeasureText(this.amount, Theme.Semi).Width + 34
+                    + (rate == "" ? 0 : TextRenderer.MeasureText(rate, Theme.SmallBold).Width + 10);
             Size = new Size(w, 32);
         }
 
@@ -385,9 +408,11 @@ class AccountStatsCard : Card
             g.Clear(Theme.Card);
             Theme.FillRound(g, new Rectangle(0, 0, Width - 1, Height - 1), 8, Theme.Input, Theme.CardBorder);
             int iw = TextRenderer.MeasureText(item, Theme.Body).Width;
+            int aw = TextRenderer.MeasureText(amount, Theme.Semi).Width;
             const TextFormatFlags L = TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix;
             TextRenderer.DrawText(g, item, Theme.Body, new Rectangle(12, 0, iw, Height), Theme.TextDim, L);
-            TextRenderer.DrawText(g, amount, Theme.Semi, new Rectangle(12 + iw + 8, 0, Width, Height), Theme.Text, L);
+            TextRenderer.DrawText(g, amount, Theme.Semi, new Rectangle(12 + iw + 8, 0, aw, Height), Theme.Text, L);
+            if (rate != "") TextRenderer.DrawText(g, rate, Theme.SmallBold, new Rectangle(12 + iw + 8 + aw + 6, 0, Width, Height), Theme.Success, L);
         }
     }
 }

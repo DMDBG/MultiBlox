@@ -11,8 +11,39 @@ public class Account
     public bool Checked { get; set; } = true;
 }
 
+/// <summary>A saved setup you can launch in one click.</summary>
+public class Profile
+{
+    public string Name { get; set; } = "";
+    public List<string> Accounts { get; set; } = new();
+    public string PlaceId { get; set; } = "";
+    public string Server { get; set; } = "";
+    public int Fps { get; set; }               // 0 = leave FPS alone
+    public bool AntiAfk { get; set; }
+    public bool PowerSaver { get; set; }
+    public bool AutoRejoin { get; set; }
+    public bool OpenViewer { get; set; }
+}
+
+/// <summary>"Farm 10,000 Summer Pearls" - counts drops from when the goal was made.</summary>
+public class Goal
+{
+    public string Item { get; set; } = "";
+    public double Target { get; set; }
+    public DateTime Created { get; set; } = DateTime.Now;
+}
+
 public class AppConfig
 {
+    public List<Profile> Profiles { get; set; } = new();
+    public List<Goal> Goals { get; set; } = new();
+    public bool AutoRejoin { get; set; }
+
+    public string AlertItems { get; set; } = "";        // comma separated, e.g. "Sky Portal, Secret"
+    public bool AlertSound { get; set; } = true;
+    public string AlertWebhook { get; set; } = "";
+    public string AlertMention { get; set; } = "";
+
     public List<Account> Accounts { get; set; } = new();
     public string PlaceId { get; set; } = "";
     public string JobId { get; set; } = "";

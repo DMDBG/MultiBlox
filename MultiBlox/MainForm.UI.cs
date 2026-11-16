@@ -158,11 +158,15 @@ public partial class MainForm
     /// <summary>Vertical, scrolling page whose cards stretch to the full width.</summary>
     static FlowLayoutPanel ScrollPage()
     {
-        var p = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
+        var p = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        // Vertical scrolling only - a sideways scrollbar is never useful here.
+        p.HorizontalScroll.Maximum = 0;
+        p.HorizontalScroll.Visible = false;
+        p.AutoScroll = true;
         Theme.DarkScroll(p);
         void Fit()
         {
-            int w = p.ClientSize.Width - 4;
+            int w = p.ClientSize.Width - 6;
             foreach (Control c in p.Controls)
             {
                 int cw = Math.Max(200, w - c.Margin.Horizontal);
@@ -334,11 +338,16 @@ public partial class MainForm
         // Launch settings
         var settings = new Card(FlowDirection.LeftToRight) { Dock = DockStyle.Top, Margin = new Padding(0) };
         txtPlace = new TextBox { Text = cfg.PlaceId, PlaceholderText = "e.g. 920587237" };
-        txtJob = new TextBox { Text = cfg.JobId, PlaceholderText = "Optional - join a specific server" };
+        txtJob = new TextBox { Text = cfg.JobId, PlaceholderText = "Optional - Job ID or private server link" };
         numDelay = Num(3, 120, cfg.LaunchDelaySec);
         settings.Controls.Add(Labeled("Place ID", Field(txtPlace, 180)));
-        settings.Controls.Add(Labeled("Job ID", Field(txtJob, 300)));
+        settings.Controls.Add(Labeled("Server", Field(txtJob, 300)));
         settings.Controls.Add(Labeled("Seconds between launches", Field(numDelay, 110)));
+        chkRejoin = new Toggle("Auto-rejoin crashes", cfg.AutoRejoin) { Margin = new Padding(0, 22, 0, 0) };
+        chkRejoin.CheckedChanged += (_, _) => { SaveConfig(); Log(chkRejoin.Checked ? "Auto-rejoin on: crashed, closed or frozen games will be relaunched." : "Auto-rejoin off."); };
+        settings.Controls.Add(chkRejoin);
+        settings.SetFlowBreak(chkRejoin, true);
+        BuildProfileRow(settings);
 
         // Toolbar
         var bLaunchSel = Btn("▶  Launch selected", async (_, _) => await LaunchMany(SelectedAccounts()));

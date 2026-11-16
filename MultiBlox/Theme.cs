@@ -317,6 +317,89 @@ class Card : FlowLayoutPanel
     }
 }
 
+/// <summary>Dark drop-down picker (Windows' ComboBox can't be fully themed): shows the choice + ▾, opens a dark menu.</summary>
+class DarkSelect : Control
+{
+    public readonly List<string> Items = new();
+    int index = -1;
+    bool hover;
+    public event EventHandler SelectedIndexChanged;
+
+    public DarkSelect(int width)
+    {
+        Size = new Size(width, 34);
+        Margin = new Padding(0);
+        Cursor = Cursors.Hand;
+        Font = Theme.Body;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
+    }
+
+    public int SelectedIndex
+    {
+        get => index;
+        set
+        {
+            int v = Items.Count == 0 ? -1 : Math.Clamp(value, -1, Items.Count - 1);
+            if (v == index) return;
+            index = v;
+            Invalidate();
+            SelectedIndexChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    public string SelectedItem => index >= 0 && index < Items.Count ? Items[index] : null;
+
+    protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+
+    protected override void OnClick(EventArgs e)
+    {
+        base.OnClick(e);
+        if (Items.Count == 0) return;
+        var menu = new ContextMenuStrip
+        {
+            Renderer = new ToolStripProfessionalRenderer(new DarkMenuTable()), BackColor = Theme.Card, ForeColor = Theme.Text,
+            Font = Font, ShowImageMargin = false, ShowCheckMargin = true, MinimumSize = new Size(Width, 0)
+        };
+        for (int i = 0; i < Items.Count; i++)
+        {
+            int k = i;
+            menu.Items.Add(new ToolStripMenuItem(Items[i], null, (_, _) => SelectedIndex = k)
+            { Checked = i == index, ForeColor = Theme.Text, Padding = new Padding(2, 3, 2, 3) });
+        }
+        menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
+        menu.Show(this, new Point(0, Height + 2));
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.Clear(Parent?.BackColor ?? Theme.Card);
+        Theme.FillRound(g, new Rectangle(0, 0, Width - 1, Height - 1), LogicalToDeviceUnits(8), hover ? Theme.Hover : Theme.Input, Focused ? Theme.Accent : Theme.CardBorder);
+        int pad = LogicalToDeviceUnits(10), arrow = LogicalToDeviceUnits(22);
+        TextRenderer.DrawText(g, SelectedItem ?? "", Font, new Rectangle(pad, 0, Width - pad - arrow, Height), Theme.Text,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        TextRenderer.DrawText(g, "▾", Theme.Semi, new Rectangle(Width - arrow - LogicalToDeviceUnits(4), 0, arrow, Height), Theme.Muted,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter);
+    }
+
+    class DarkMenuTable : ProfessionalColorTable
+    {
+        public override Color ToolStripDropDownBackground => Theme.Card;
+        public override Color MenuBorder => Theme.CardBorder;
+        public override Color MenuItemBorder => Theme.Hover;
+        public override Color MenuItemSelected => Theme.Hover;
+        public override Color MenuItemSelectedGradientBegin => Theme.Hover;
+        public override Color MenuItemSelectedGradientEnd => Theme.Hover;
+        public override Color CheckBackground => Theme.Selection;
+        public override Color CheckSelectedBackground => Theme.Selection;
+        public override Color CheckPressedBackground => Theme.Selection;
+        public override Color ImageMarginGradientBegin => Theme.Card;
+        public override Color ImageMarginGradientMiddle => Theme.Card;
+        public override Color ImageMarginGradientEnd => Theme.Card;
+    }
+}
+
 class NavButton : Control
 {
     readonly string glyph;

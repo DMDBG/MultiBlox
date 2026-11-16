@@ -7,11 +7,18 @@ Run several Roblox accounts at the same time, from one clean launcher.
 ## Features
 
 - **Multi-Roblox** - open as many Roblox windows as you like. If Roblox is already open when MultiBlox starts, it offers to close it so multi-instance can turn on.
-- **Accounts** - add accounts by logging in normally in a built-in browser window (username + password, 2-step and captcha all work). Launch one, or all checked accounts, into any game or a specific server.
+- **Accounts** - add accounts by logging in normally in a built-in browser window (username + password, 2-step and captcha all work). Launch one, or all checked accounts, into any game.
+- **Private servers** - the **Server** box takes a Job ID or a private server link (old `privateServerLinkCode=` links and new `share?code=` links).
+- **Profiles** - save a whole setup (which accounts, game, server, FPS, anti-AFK, power saver, auto-rejoin, mini viewer) and launch it in one click.
+- **Auto-rejoin** - if a game crashes, its window closes, or Roblox freezes for a minute, that account rejoins the same game/server. Max 5 rejoins per account per 30 minutes so a broken game can't loop.
 - **Mini viewer** - tiny live previews of every game, at any size (Roblox's own window won't go that small). The real windows stay running off-screen.
   - Hover a preview → that game pops up beside the viewer as the active window, so you can check on it.
   - Click → keep it out and play. Right-click → tuck it away.
 - **Discord stats** - if your macro posts match results to a Discord channel (webhook), MultiBlox reads that channel with your own bot and tallies **victories, losses and win rate per account**, plus every **drop** added up. Click an account to expand its drop totals and recent matches.
+  - **Drops per hour** on every item, based on the last 24 hours.
+  - **Goals** - e.g. "500,000 Summer Pearls" with a progress bar and time-left estimate across all accounts.
+  - **Charts** - wins & losses or any item per day, per account or all, over 7/14/30 days.
+  - **Rare-drop alerts** - Windows notification + sound when a watched item drops, plus an optional Discord ping (handy on your phone).
 - **Anti-AFK** - every few minutes, briefly un-hides each game, clicks it, and hides it again so you don't get idle-kicked.
 - **Power saver** - lower Roblox's CPU priority, trim its RAM, limit CPU cores, and launch at low FPS.
 - **FPS editor** - set the frame-rate cap new games launch with (presets up to unlimited).

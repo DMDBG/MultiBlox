@@ -38,7 +38,7 @@ public class UserStats
 /// <summary>All match results read from Discord, saved in %APPDATA%\MultiBlox\stats.json.</summary>
 public class StatsStore
 {
-    const int RecentCap = 25;
+    const int RecentCap = 5000;   // full history for charts/rates (≈1 MB per account at the cap)
     public Dictionary<string, UserStats> Users { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string LastMessageId { get; set; } = "";
     public string ChannelId { get; set; } = "";   // stats belong to this channel; switching channels starts fresh
@@ -87,6 +87,42 @@ public class StatsStore
         u.Recent = u.Recent.OrderByDescending(r => r.Time).Take(RecentCap).ToList();
         if (m.Time > u.LastMatch) u.LastMatch = m.Time;
     }
+}
+
+// ───────────────────────────── rates ─────────────────────────────
+
+public static class Rates
+{
+    /// <summary>Average match length (from "00:30:59" durations), default 15 minutes.</summary>
+    static double AvgMatchHours(IEnumerable<MatchRecord> ms)
+    {
+        var d = ms.Select(m => TimeSpan.TryParse(m.Duration, out var t) ? t.TotalHours : 0).Where(h => h > 0).ToList();
+        return d.Count == 0 ? 0.25 : d.Average();
+    }
+
+    /// <summary>How much of <paramref name="item"/> one account makes per hour, based on its last 24 hours of play.</summary>
+    public static double PerHour(IEnumerable<MatchRecord> matches, string item, TimeSpan? window = null)
+    {
+        var since = DateTime.Now - (window ?? TimeSpan.FromHours(24));
+        var ms = matches.Where(m => m.Time >= since).OrderBy(m => m.Time).ToList();
+        if (ms.Count == 0) return 0;
+        double total = ms.Sum(m => m.Drops.Where(d => d.Item.Equals(item, StringComparison.OrdinalIgnoreCase)).Sum(d => d.Amount));
+        double hours = (ms[^1].Time - ms[0].Time).TotalHours + AvgMatchHours(ms);   // +1 match so a single result isn't "infinite/hr"
+        return hours <= 0 ? 0 : total / hours;
+    }
+
+    /// <summary>Accounts farm in parallel, so the combined rate is the sum of each account's rate.</summary>
+    public static double PerHourAll(StatsStore s, string item) => s.Users.Values.Sum(u => PerHour(u.Recent, item));
+
+    public static double SumSince(StatsStore s, string item, DateTime since) =>
+        s.Users.Values.SelectMany(u => u.Recent).Where(m => m.Time >= since)
+         .Sum(m => m.Drops.Where(d => d.Item.Equals(item, StringComparison.OrdinalIgnoreCase)).Sum(d => d.Amount));
+
+    public static string Short(double v) =>
+        v >= 1_000_000 ? $"{v / 1_000_000:0.#}M" : v >= 10_000 ? $"{v / 1000:0.#}k" : v >= 100 ? v.ToString("N0") : v.ToString("0.#");
+
+    public static string Duration(TimeSpan t) =>
+        t.TotalDays >= 1 ? $"{(int)t.TotalDays}d {t.Hours}h" : t.TotalHours >= 1 ? $"{(int)t.TotalHours}h {t.Minutes}m" : $"{Math.Max(1, (int)t.TotalMinutes)}m";
 }
 
 // ───────────────────────────── parsing ─────────────────────────────
