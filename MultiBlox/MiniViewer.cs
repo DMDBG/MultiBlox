@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace MultiBlox;
 
@@ -76,7 +76,7 @@ class MiniViewer : Form
         public IntPtr Src, Thumb;
         public int Pid;
         public string Title = "";
-        public bool Hot, Parked;
+        public bool Hot, Parked, Dragging;
         public readonly Panel Screen = new() { Dock = DockStyle.Top, BackColor = Color.FromArgb(6, 7, 10), Cursor = Cursors.Hand };
 
         public Tile()
@@ -93,8 +93,9 @@ class MiniViewer : Form
             var g = e.Graphics;
             g.Clear(Theme.Bg);
             var r = new Rectangle(1, 1, Width - 3, Height - 3);
-            Theme.FillRound(g, r, 10, Hot ? Color.FromArgb(30, 40, 62) : Theme.Card, Hot ? Theme.Accent : Theme.CardBorder);
-            if (Hot)   // brighter double outline = "glow"
+            Theme.FillRound(g, r, 10, Dragging ? Color.FromArgb(36, 48, 78) : Hot ? Color.FromArgb(30, 40, 62) : Theme.Card,
+                Hot || Dragging ? Theme.Accent : Theme.CardBorder);
+            if (Hot || Dragging)   // brighter double outline = "glow"
             {
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 using var path = Theme.Round(new Rectangle(0, 0, Width - 1, Height - 1), 11);
@@ -126,6 +127,7 @@ class MiniViewer : Form
 
     readonly Func<List<(int pid, IntPtr hwnd)>> source;
     readonly Func<int, string> nameOf;
+    readonly Action<List<int>> onReorder;   // tiles were dragged into a new order (PIDs, first to last)
     readonly Dictionary<IntPtr, Tile> tiles = new();
     readonly Dictionary<IntPtr, Native.RECT> homeRects = new();   // where each window was before parking
     readonly HashSet<IntPtr> parked = new();
@@ -142,10 +144,11 @@ class MiniViewer : Form
     public bool ParkEnabled => chkPark.Checked;
     public bool IsParked(IntPtr h) => parked.Contains(h);
 
-    public MiniViewer(Func<List<(int, IntPtr)>> source, Func<int, string> nameOf, int tileW, int tileH, int columns)
+    public MiniViewer(Func<List<(int, IntPtr)>> source, Func<int, string> nameOf, Action<List<int>> onReorder, int tileW, int tileH, int columns)
     {
         this.source = source;
         this.nameOf = nameOf;
+        this.onReorder = onReorder;
         this.tileW = tileW;
         this.tileH = tileH;
         this.columns = columns;
@@ -239,16 +242,21 @@ class MiniViewer : Form
             t.Controls.Add(t.Screen);
             MouseEventHandler click = (_, e) =>
             {
+                if (dragging) return;   // that was the end of a drag, not a click
                 if (e.Button == MouseButtons.Left) BringUp(h);
                 else if (e.Button == MouseButtons.Right) { Park(h); RefreshCaptions(); }
             };
             t.MouseClick += click;
             t.Screen.MouseClick += click;
+            HookDrag(t, t);
+            HookDrag(t, t.Screen);
             tiles[h] = t;
             grid.Controls.Add(t);
             if (Native.IsIconic(h)) Native.ShowWindow(h, Native.SW_SHOWNOACTIVATE);   // minimized windows can't be previewed
             if (ParkEnabled) Park(h);
         }
+
+        if (dragTile == null) ApplyOrder(list);
 
         empty.Visible = tiles.Count == 0;
         grid.Visible = tiles.Count > 0;
@@ -297,6 +305,73 @@ class MiniViewer : Form
         }
     }
 
+    // ───────────────────────────── drag to reorder ─────────────────────────────
+
+    Tile dragTile;
+    Point dragStart;
+    bool dragging;
+
+    /// <summary>Puts the tiles in the same order as the source list (which follows the saved order).</summary>
+    void ApplyOrder(List<(int pid, IntPtr hwnd)> list)
+    {
+        int i = 0;
+        foreach (var (_, h) in list)
+            if (tiles.TryGetValue(h, out var t))
+            {
+                if (grid.Controls.GetChildIndex(t) != i) grid.Controls.SetChildIndex(t, i);
+                i++;
+            }
+    }
+
+    void HookDrag(Tile t, Control c)
+    {
+        c.MouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Left) return;
+            dragTile = t; dragStart = Cursor.Position; dragging = false;
+        };
+        c.MouseMove += (_, _) =>
+        {
+            if (dragTile != t || (MouseButtons & MouseButtons.Left) == 0) return;
+            var cur = Cursor.Position;
+            if (!dragging)
+            {
+                if (Math.Abs(cur.X - dragStart.X) + Math.Abs(cur.Y - dragStart.Y) < 8) return;   // still just a click
+                dragging = true;
+                TuckSurfaced();
+                if (hot != null) { hot.Hot = false; hot.Invalidate(); hot = null; }
+                t.Dragging = true; t.Invalidate();
+            }
+            Cursor.Current = Cursors.SizeAll;
+            var target = tiles.Values.FirstOrDefault(x => x != t && x.RectangleToScreen(x.ClientRectangle).Contains(cur));
+            if (target != null)
+            {
+                grid.Controls.SetChildIndex(t, grid.Controls.GetChildIndex(target));
+                PositionThumbs();
+            }
+            else AutoScrollWhileDragging(cur);
+        };
+        c.MouseUp += (_, _) =>
+        {
+            if (dragTile != t) return;
+            bool moved = dragging;
+            dragTile = null; dragging = false;
+            t.Dragging = false; t.Invalidate();
+            if (moved) onReorder?.Invoke(grid.Controls.OfType<Tile>().Select(x => x.Pid).ToList());
+        };
+    }
+
+    /// <summary>Dragging above or below the visible tiles scrolls the grid so you can reach the rest.</summary>
+    void AutoScrollWhileDragging(Point cur)
+    {
+        var r = grid.RectangleToScreen(grid.ClientRectangle);
+        int step = cur.Y < r.Top + 20 ? -20 : cur.Y > r.Bottom - 20 ? 20 : 0;
+        if (step == 0) return;
+        var pos = grid.AutoScrollPosition;
+        grid.AutoScrollPosition = new Point(-pos.X, Math.Max(0, -pos.Y + step));
+        PositionThumbs();
+    }
+
     // ───────────────────────────── hover: bring the real window up ─────────────────────────────
 
     IntPtr surfaced;            // real Roblox window currently popped up because you're hovering its tile
@@ -306,6 +381,7 @@ class MiniViewer : Form
 
     void TrackHover()
     {
+        if (dragging) return;   // no popping windows up while you're moving tiles around
         var cursor = Cursor.Position;
         IntPtr root = GetAncestor(WindowFromPoint(cursor), 2 /*GA_ROOT*/);
         Tile hit = null;

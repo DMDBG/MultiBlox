@@ -14,6 +14,7 @@ Run several Roblox accounts at the same time, from one clean launcher.
 - **Mini viewer** - tiny live previews of every game, at any size (Roblox's own window won't go that small). The real windows stay running off-screen.
   - Hover a preview → that game pops up beside the viewer as the active window, so you can check on it.
   - Click → keep it out and play. Right-click → tuck it away.
+  - Drag previews to put your accounts in the order you want. The order is saved and also used by the Instances list, Tile real windows and anti-AFK.
 - **Discord stats** - if your macro posts match results to a Discord channel (webhook), MultiBlox reads that channel with your own bot and tallies **victories, losses and win rate per account**, plus every **drop** added up. Click an account to expand its drop totals and recent matches.
   - **Drops per hour** on every item, based on the last 24 hours.
   - **Goals** - e.g. "500,000 Summer Pearls" with a progress bar and time-left estimate across all accounts.
@@ -22,7 +23,10 @@ Run several Roblox accounts at the same time, from one clean launcher.
 - **Anti-AFK** - every few minutes, briefly un-hides each game, clicks it, and hides it again so you don't get idle-kicked.
 - **Power saver** - lower Roblox's CPU priority, trim its RAM, limit CPU cores, and launch at low FPS.
 - **FPS editor** - set the frame-rate cap new games launch with (presets up to unlimited).
-- **Instances** - see every running game with RAM usage, focus or close them, and clean up leftover background Roblox processes.
+- **Instances** - see every running game with RAM usage, focus or close them, and clean up leftover background Roblox processes. Drag rows to reorder.
+- **Auto-update** - MultiBlox checks GitHub for new versions, downloads them in the background, and installs on restart (or whenever you next close it). Your accounts and settings are kept. Turn it off with the switch at the bottom of the sidebar; click the version number to check now.
+
+> **Updating from 1.3.0 or older?** Those versions can't update themselves yet. Close MultiBlox and replace `MultiBlox.exe` with the new one. Your accounts and settings live in `%APPDATA%\MultiBlox`, not in the exe, so nothing needs to be added again.
 
 ## Quick start
 

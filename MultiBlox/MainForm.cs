@@ -15,12 +15,13 @@ public partial class MainForm : Form
         SaveConfig();
         if (viewer != null && !viewer.IsDisposed) { viewer.Activate(); return; }
         viewer = new MiniViewer(
-            () => RobloxPids().OrderBy(p => p).Select(p => (p, Native.FindRobloxWindow(p))).Where(x => x.Item2 != IntPtr.Zero).ToList(),
+            () => Ordered(RobloxPids()).Select(p => (p, Native.FindRobloxWindow(p))).Where(x => x.Item2 != IntPtr.Zero).ToList(),
             pid => pidOwner.TryGetValue(pid, out var n) ? n : $"Roblox ({pid})",
+            SetOrder,
             (int)numTileW.Value, (int)numTileH.Value, (int)numCols.Value);
         viewer.FormClosed += (_, _) => { viewer = null; Log("Mini viewer closed - Roblox windows put back."); };
         viewer.Show();
-        Log($"Mini viewer opened ({numTileW.Value}x{numTileH.Value} tiles). Click a tile to play that window, right-click to hide it again.");
+        Log($"Mini viewer opened ({numTileW.Value}x{numTileH.Value} tiles). Click a tile to play that window, right-click to hide it again, drag to reorder.");
     }
 
     bool ViewerParking => viewer != null && !viewer.IsDisposed && viewer.ParkEnabled;
@@ -122,7 +123,7 @@ public partial class MainForm : Form
         return map;
     }
 
-    List<IntPtr> RobloxWindows() => RobloxPids().OrderBy(p => p).Select(Native.FindRobloxWindow).Where(h => h != IntPtr.Zero).ToList();
+    List<IntPtr> RobloxWindows() => Ordered(RobloxPids()).Select(Native.FindRobloxWindow).Where(h => h != IntPtr.Zero).ToList();
 
     void ForEachWindow(Action<IntPtr> act) { foreach (var h in RobloxWindows()) act(h); }
 
@@ -428,7 +429,7 @@ public partial class MainForm : Form
         var selected = SelectedPids();
         lvInstances.BeginUpdate();
         lvInstances.Items.Clear();
-        foreach (int pid in pids.OrderBy(p => p))
+        foreach (int pid in Ordered(pids))
         {
             string ram = "?", pri = "?";
             bool old = false;

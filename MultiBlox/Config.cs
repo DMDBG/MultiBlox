@@ -44,6 +44,9 @@ public class AppConfig
     public string AlertWebhook { get; set; } = "";
     public string AlertMention { get; set; } = "";
 
+    public List<string> InstanceOrder { get; set; } = new();   // account names, in the order you dragged them
+    public bool AutoUpdate { get; set; } = true;
+
     public List<Account> Accounts { get; set; } = new();
     public string PlaceId { get; set; } = "";
     public string JobId { get; set; } = "";

@@ -42,7 +42,7 @@ public partial class MainForm
         Controls.Add(BuildSidebar());
 
         AddPage("accounts", "Accounts", "Add your accounts and launch them into a game", "", BuildAccountsPage());
-        AddPage("instances", "Instances & Viewer", "Every Roblox window that's open right now", "", BuildInstancesPage());
+        AddPage("instances", "Instances & Viewer", "Every Roblox window that's open right now - drag rows to reorder", "", BuildInstancesPage());
         AddPage("discord", "Discord Stats", "Wins, losses and drops from your macro's webhooks", "", BuildDiscordPage());
         AddPage("afk", "Anti-AFK & Saver", "Stay in game while away, and keep your PC cool", "", BuildAfkSaverPage());
         AddPage("fps", "FPS Editor", "Set the frame-rate cap Roblox launches with", "", BuildFpsPage());
@@ -60,6 +60,7 @@ public partial class MainForm
             ShowPage(arg != null && pages.ContainsKey(arg[7..]) ? arg[7..] : "accounts");
             RefreshAccounts();
             StartDiscord();
+            StartUpdater();
             UpdateStats();
             refreshTimer.Start();
             if (cfg.SaverEnabled) chkSaver.Checked = true;
@@ -270,7 +271,10 @@ public partial class MainForm
         side.Controls.Add(menuLbl);
         side.Controls.Add(Spacer(10));
         side.Controls.Add(brand);
+        side.Controls.Add(BuildUpdateCard());
+        side.Controls.Add(Spacer(8, DockStyle.Bottom));
         side.Controls.Add(statusCard);
+        side.Controls.Add(BuildVersionFooter());
         return side;
     }
 
@@ -447,6 +451,7 @@ public partial class MainForm
         lvInstances.Columns.Add("Priority", 120);
         Theme.StyleList(lvInstances, statusCol: 2);
         lvInstances.DoubleClick += (_, _) => FocusSelected();
+        HookInstanceDrag();
 
         page.Controls.Add(ListCard(lvInstances));
         page.Controls.Add(Spacer(12));
