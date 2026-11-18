@@ -9,6 +9,7 @@ Run several Roblox accounts at the same time, from one clean launcher.
 - **Multi-Roblox** - open as many Roblox windows as you like. If Roblox is already open when MultiBlox starts, it offers to close it so multi-instance can turn on.
 - **Accounts** - add accounts by logging in normally in a built-in browser window (username + password, 2-step and captcha all work). Launch one, or all checked accounts, into any game.
 - **Private servers** - the **Server** box takes a Job ID or a private server link (old `privateServerLinkCode=` links and new `share?code=` links).
+- **Join a user** - type `@username` (or paste their profile link) in the **Server** box, or click **Join a user**, to send accounts into that player's game. Auto-rejoin follows them if they move servers. They must be in a game and allow joins.
 - **Profiles** - save a whole setup (which accounts, game, server, FPS, anti-AFK, power saver, auto-rejoin, mini viewer) and launch it in one click.
 - **Auto-rejoin** - if a game crashes, its window closes, or Roblox freezes for a minute, that account rejoins the same game/server. Max 5 rejoins per account per 30 minutes so a broken game can't loop.
 - **Mini viewer** - tiny live previews of every game, at any size (Roblox's own window won't go that small). The real windows stay running off-screen.
@@ -20,9 +21,11 @@ Run several Roblox accounts at the same time, from one clean launcher.
   - **Goals** - e.g. "500,000 Summer Pearls" with a progress bar and time-left estimate across all accounts.
   - **Charts** - wins & losses or any item per day, per account or all, over 7/14/30 days.
   - **Rare-drop alerts** - Windows notification + sound when a watched item drops, plus an optional Discord ping (handy on your phone).
+  - **Phone control** - type commands in Discord and your bot replies: `!status`, `!stats`, `!screenshot`, `!launch`, `!rejoin`, `!close`, `!join <username>`. Only Discord user IDs you list can use it. The bot needs **Send Messages** and **Attach Files** in that channel.
 - **Anti-AFK** - every few minutes, briefly un-hides each game, clicks it, and hides it again so you don't get idle-kicked.
 - **Power saver** - lower Roblox's CPU priority, trim its RAM, limit CPU cores, and launch at low FPS.
-- **FPS editor** - set the frame-rate cap new games launch with (presets up to unlimited).
+- **FPS editor** - set the frame-rate cap new games launch with (presets up to unlimited). It sets Roblox's own Maximum Frame Rate setting.
+- **Low-end mode** - lowest graphics, lowest textures, no grass, gray sky, low-detail models and muted sound for every game you launch, so more accounts fit on one PC. Uses only settings on Roblox's official allowlist; turning it off puts your graphics level and volume back.
 - **Instances** - see every running game with RAM usage, focus or close them, and clean up leftover background Roblox processes. Drag rows to reorder.
 - **Auto-update** - MultiBlox checks GitHub for new versions, downloads them in the background, and installs on restart (or whenever you next close it). Your accounts and settings are kept. Turn it off with the switch at the bottom of the sidebar; click the version number to check now.
 

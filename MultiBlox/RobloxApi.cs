@@ -10,7 +10,10 @@ public class ServerTarget
     public long PlaceId { get; set; }
     public string JobId { get; set; } = "";
     public string LinkCode { get; set; } = "";
+    public long FollowUserId { get; set; }          // "join this user" - re-checked on every rejoin, since they may move
+    public string FollowName { get; set; } = "";
     public override string ToString() =>
+        FollowUserId > 0 ? $"{FollowName}'s game" + (PlaceId > 0 ? $" (place {PlaceId})" : "") :
         !string.IsNullOrEmpty(LinkCode) ? $"place {PlaceId} (private server)" :
         !string.IsNullOrEmpty(JobId) ? $"place {PlaceId} (server {JobId[..8]}…)" : $"place {PlaceId}";
 }
@@ -103,6 +106,11 @@ static class RobloxApi
         var t = new ServerTarget { PlaceId = placeId };
         if (server == "") return t;
         if (GuidRx.IsMatch(server)) { t.JobId = server; return t; }
+        if (IsUserRef(server))
+        {
+            var (id, name) = await ResolveUserAsync(cookie, server);
+            return await FollowAsync(cookie, id, name);
+        }
 
         var old = OldLinkRx.Match(server);
         if (old.Success)
@@ -127,7 +135,63 @@ static class RobloxApi
             t.LinkCode = inv.GetProperty("linkCode").GetString();
             return t;
         }
-        throw new Exception("The Server box should be a Job ID or a private server link.");
+        throw new Exception("The Server box should be a Job ID, a private server link, or @username.");
+    }
+
+    // ───────────────────────────── joining a user ─────────────────────────────
+
+    static readonly System.Text.RegularExpressions.Regex ProfileRx = new(@"roblox\.com/users/(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    static readonly System.Text.RegularExpressions.Regex UsernameRx = new(@"^[A-Za-z0-9_]{3,20}$");
+
+    /// <summary>"@username" or a roblox.com/users/123/profile link.</summary>
+    public static bool IsUserRef(string s)
+    {
+        s = (s ?? "").Trim();
+        return (s.StartsWith('@') && UsernameRx.IsMatch(s[1..])) || ProfileRx.IsMatch(s);
+    }
+
+    public static async Task<(long id, string name)> ResolveUserAsync(string cookie, string reference)
+    {
+        reference = reference.Trim();
+        var m = ProfileRx.Match(reference);
+        if (m.Success)
+        {
+            long id = long.Parse(m.Groups[1].Value);
+            using var req = Request(HttpMethod.Get, $"https://users.roblox.com/v1/users/{id}", cookie);
+            using var resp = await Http.SendAsync(req);
+            if (!resp.IsSuccessStatusCode) throw new Exception($"Couldn't find Roblox user {id}.");
+            using var d = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            return (id, d.RootElement.GetProperty("name").GetString());
+        }
+        string name = reference.TrimStart('@');
+        string body = await PostJsonAsync("https://users.roblox.com/v1/usernames/users", cookie,
+            JsonSerializer.Serialize(new { usernames = new[] { name }, excludeBannedUsers = true }));
+        using var doc = JsonDocument.Parse(body);
+        var data = doc.RootElement.GetProperty("data");
+        if (data.GetArrayLength() == 0) throw new Exception($"There's no Roblox user called “{name}”.");
+        return (data[0].GetProperty("id").GetInt64(), data[0].GetProperty("name").GetString());
+    }
+
+    /// <summary>
+    /// Where a user is right now, as seen by this account. If their exact server is visible it's used directly;
+    /// otherwise Roblox's own "follow user" join is used, which obeys their privacy settings.
+    /// </summary>
+    public static async Task<ServerTarget> FollowAsync(string cookie, long userId, string name)
+    {
+        string body = await PostJsonAsync("https://presence.roblox.com/v1/presence/users", cookie,
+            JsonSerializer.Serialize(new { userIds = new[] { userId } }));
+        using var doc = JsonDocument.Parse(body);
+        var list = doc.RootElement.GetProperty("userPresences");
+        if (list.GetArrayLength() == 0) throw new Exception($"Couldn't see where {name} is.");
+        var p = list[0];
+        int type = p.TryGetProperty("userPresenceType", out var tp) ? tp.GetInt32() : 0;
+        if (type == 3) throw new Exception($"{name} is in Roblox Studio, not a game.");
+        if (type != 2) throw new Exception($"{name} isn't in a game right now (or hides it with their privacy settings).");
+
+        var t = new ServerTarget { FollowUserId = userId, FollowName = name };
+        if (p.TryGetProperty("placeId", out var pl) && pl.ValueKind == JsonValueKind.Number) t.PlaceId = pl.GetInt64();
+        if (p.TryGetProperty("gameId", out var g) && g.ValueKind == JsonValueKind.String && GuidRx.IsMatch(g.GetString())) t.JobId = g.GetString();
+        return t;
     }
 
     /// <summary>POST with Roblox's CSRF handshake (first try returns a token to retry with).</summary>
@@ -161,8 +225,10 @@ static class RobloxApi
         string launcher =
             !string.IsNullOrEmpty(target.LinkCode)
                 ? $"{Base}request=RequestPrivateGame&browserTrackerId={tracker}&placeId={placeId}&linkCode={Uri.EscapeDataString(target.LinkCode)}&isPlayTogetherGame=false"
-            : !string.IsNullOrEmpty(target.JobId)
+            : !string.IsNullOrEmpty(target.JobId) && placeId > 0
                 ? $"{Base}request=RequestGameJob&browserTrackerId={tracker}&placeId={placeId}&gameId={Uri.EscapeDataString(target.JobId)}&isPlayTogetherGame=false"
+            : target.FollowUserId > 0
+                ? $"{Base}request=RequestFollowUser&browserTrackerId={tracker}&userId={target.FollowUserId}&isPlayTogetherGame=false"
                 : $"{Base}request=RequestGame&browserTrackerId={tracker}&placeId={placeId}&isPlayTogetherGame=false";
 
         return "roblox-player:1+launchmode:play" +

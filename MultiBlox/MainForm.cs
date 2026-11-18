@@ -84,6 +84,12 @@ public partial class MainForm : Form
         cfg.FpsAutoApply = chkFpsAuto.Checked;
         if (chkDiscord != null) cfg.DiscordEnabled = chkDiscord.Checked;
         if (chkRejoin != null) cfg.AutoRejoin = chkRejoin.Checked;
+        if (chkCommands != null)
+        {
+            cfg.DiscordCommands = chkCommands.Checked;
+            cfg.DiscordCommandUsers = txtCmdUsers.Text.Trim();
+            cfg.DiscordCommandChannelId = txtCmdChannel.Text.Trim();
+        }
         if (txtAlertItems != null)
         {
             cfg.AlertItems = txtAlertItems.Text.Trim();
@@ -326,7 +332,9 @@ public partial class MainForm : Form
 
     // ───────────────────────────── Launching ─────────────────────────────
 
-    async Task LaunchMany(List<Account> accounts)
+    /// <param name="serverOverride">Used instead of the Server box (e.g. "@username" from "Join a user").</param>
+    /// <param name="targetOf">Per-account fixed target (e.g. rejoin into the same server); null = use the boxes.</param>
+    async Task LaunchMany(List<Account> accounts, string serverOverride = null, Func<Account, ServerTarget> targetOf = null)
     {
         if (launching) return;
         if (accounts.Count == 0) { Log("Nothing to launch - select or check some accounts."); return; }
@@ -338,7 +346,7 @@ public partial class MainForm : Form
         {
             for (int i = 0; i < accounts.Count; i++)
             {
-                await LaunchAccount(accounts[i]);
+                await LaunchAccount(accounts[i], targetOf?.Invoke(accounts[i]), serverOverride);
                 if (i < accounts.Count - 1) await Task.Delay((int)numDelay.Value * 1000);
             }
         }
@@ -350,7 +358,7 @@ public partial class MainForm : Form
     }
 
     /// <param name="fixedTarget">Used by auto-rejoin to go back to exactly the same game/server; otherwise the boxes on screen are used.</param>
-    async Task LaunchAccount(Account a, ServerTarget fixedTarget = null)
+    async Task LaunchAccount(Account a, ServerTarget fixedTarget = null, string serverOverride = null)
     {
         ServerTarget target = fixedTarget;
         string cookie;
@@ -360,12 +368,13 @@ public partial class MainForm : Form
         if (target == null)
         {
             // Account's own place override wins; otherwise the Place ID box, or the place inside a pasted server link.
-            bool overridden = !string.IsNullOrWhiteSpace(a.PlaceId);
-            string server = overridden ? "" : txtJob.Text.Trim();
-            long.TryParse(overridden ? a.PlaceId.Trim() : txtPlace.Text.Trim(), out long placeId);
+            // "Join a user" (serverOverride) ignores both - the user's game decides the place.
+            bool overridden = serverOverride == null && !string.IsNullOrWhiteSpace(a.PlaceId);
+            string server = serverOverride ?? (overridden ? "" : txtJob.Text.Trim());
+            long.TryParse(overridden ? a.PlaceId.Trim() : serverOverride != null ? "" : txtPlace.Text.Trim(), out long placeId);
             if (placeId == 0) placeId = RobloxApi.PlaceFromLink(server);
             bool shareLink = server.Contains("share?code=", StringComparison.OrdinalIgnoreCase);
-            if (placeId == 0 && !shareLink)
+            if (placeId == 0 && !shareLink && !RobloxApi.IsUserRef(server))
             {
                 Log("Enter a Place ID first (the number in the game's URL: roblox.com/games/<PlaceID>/...).");
                 return;
@@ -373,10 +382,23 @@ public partial class MainForm : Form
             try { target = await RobloxApi.ResolveServerAsync(cookie, server, placeId); }
             catch (Exception ex) { SetStatus(a, "✖ " + ex.Message); Log($"[{a.Name}] {ex.Message}"); return; }
         }
+        else if (target.FollowUserId > 0)
+        {
+            // Following someone: look up where they are now (they may have changed servers since).
+            try { target = await RobloxApi.FollowAsync(cookie, target.FollowUserId, target.FollowName); }
+            catch (Exception ex) { SetStatus(a, "✖ " + ex.Message); Log($"[{a.Name}] {ex.Message}"); return; }
+        }
+        if (target.FollowUserId > 0 && target.FollowUserId == a.UserId)
+        {
+            SetStatus(a, "Skipped (can't join itself)");
+            Log($"[{a.Name}] skipped - that's the account being joined.");
+            return;
+        }
 
         int fps = chkSaver.Checked && chkSaverFps.Checked ? (int)numSaverFps.Value
                 : chkFpsAuto.Checked ? (int)numFps.Value : 0;
         if (fps > 0) ApplyFps(fps, true);
+        if (cfg.LowGfx) ApplyLowGfx(true);
 
         try
         {
@@ -694,10 +716,15 @@ public partial class MainForm : Form
         foreach (var f in FlagFiles())
         {
             try { EditFlags(f, o => o[FpsFlag] = fps); n++; }
-            catch (Exception ex) { Log($"Couldn't write {f}: {ex.Message}"); }
+            catch (Exception ex) { if (!quiet) Log($"Couldn't write {f}: {ex.Message}"); }
         }
-        if (n == 0) { Log("Couldn't find a Roblox install to apply FPS to."); return; }
-        if (!quiet) Log($"FPS set to {(fps >= 9999 ? "unlimited" : fps.ToString())} for new launches ({n} location(s)). Running games keep their FPS until you rejoin.");
+        // Since Roblox's Fast Flag allowlist (Sept 2025) the flag above is ignored for most players,
+        // so the cap also goes into Roblox's own "Maximum Frame Rate" setting.
+        bool wroteSetting = false;
+        try { SetRobloxSettings(new Dictionary<string, string> { ["FramerateCap"] = fps.ToString() }); wroteSetting = true; }
+        catch (Exception ex) { if (!quiet) Log("Couldn't set Roblox's Maximum Frame Rate setting: " + ex.Message); }
+        if (n == 0 && !wroteSetting) { Log("Couldn't find a Roblox install to apply FPS to."); return; }
+        if (!quiet) Log($"FPS set to {(fps >= 9999 ? "unlimited" : fps.ToString())} for new launches. Running games keep their FPS until you rejoin.");
     }
 
     void ResetFps()
@@ -707,6 +734,7 @@ public partial class MainForm : Form
         {
             try { EditFlags(f, o => o.Remove(FpsFlag)); n++; } catch { }
         }
+        try { SetRobloxSettings(new Dictionary<string, string> { ["FramerateCap"] = null }); } catch { }
         chkFpsAuto.Checked = false;
         Log($"Removed the FPS setting from {n} location(s); auto-apply turned off.");
     }

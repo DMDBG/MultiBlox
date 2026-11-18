@@ -64,7 +64,7 @@ public partial class MainForm
             "Open the link it makes and add the bot to your server.\n" +
             "4.  In Discord: Settings → Advanced → turn on Developer Mode. Right-click the channel your macro posts to → Copy Channel ID → paste above.\n" +
             "5.  Click Connect. The last 100 results are imported, then new ones are picked up automatically.\n\n" +
-            "The token is stored encrypted for your Windows user only and is only sent to discord.com. The bot only reads - it never posts.");
+            "The token is stored encrypted for your Windows user only and is only sent to discord.com. The bot only reads - it only posts if you turn on Phone control below.");
         help.Visible = !haveToken;
         var helpBtn = Btn(help.Visible ? "Hide setup steps" : "Show setup steps", null);
         helpBtn.Click += (_, _) => { help.Visible = !help.Visible; helpBtn.Text = help.Visible ? "Hide setup steps" : "Show setup steps"; };
@@ -89,6 +89,7 @@ public partial class MainForm
         page.Controls.Add(SectionLabel("SETTINGS"));
         page.Controls.Add(setup);
         page.Controls.Add(BuildAlertsCard());
+        page.Controls.Add(BuildCommandsCard());
         if (!haveToken) page.Controls.SetChildIndex(setup, 1);   // first time: setup goes right at the top
 
         discordTimer.Tick += async (_, _) => await PollDiscord(false);
@@ -104,6 +105,7 @@ public partial class MainForm
             discordTimer.Start();
             _ = PollDiscord(false);
         }
+        if (cfg.DiscordCommands) SetCommands(true);
     }
 
     void SetDiscordStatus(string text, Color color) { lblDiscord.Text = text; lblDiscord.ForeColor = color; }

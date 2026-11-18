@@ -290,6 +290,51 @@ public class DiscordReader
 
     public static ulong Id(JsonElement m) => ulong.TryParse(m.GetProperty("id").GetString(), out var v) ? v : 0;
 
+    /// <summary>Posts a reply in the channel (used by phone control). Never pings anyone.</summary>
+    public async Task SendAsync(string text, string replyTo = null, byte[] jpeg = null)
+    {
+        if (text.Length > 1990) text = text[..1990] + "…";
+        var payload = new Dictionary<string, object>
+        {
+            ["content"] = text,
+            ["allowed_mentions"] = new { parse = Array.Empty<string>() }
+        };
+        if (replyTo != null) payload["message_reference"] = new { message_id = replyTo, fail_if_not_exists = false };
+        if (jpeg != null) payload["attachments"] = new[] { new { id = 0, filename = "multiblox.jpg" } };
+        string json = JsonSerializer.Serialize(payload);
+
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, $"https://discord.com/api/v10/channels/{channelId}/messages");
+            req.Headers.TryAddWithoutValidation("Authorization", "Bot " + token);
+            req.Headers.UserAgent.ParseAdd("DiscordBot (https://github.com, 1.0) MultiBlox");
+            if (jpeg == null) req.Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            else
+            {
+                var form = new MultipartFormDataContent();
+                form.Add(new StringContent(json, System.Text.Encoding.UTF8, "application/json"), "payload_json");
+                var file = new ByteArrayContent(jpeg);
+                file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+                form.Add(file, "files[0]", "multiblox.jpg");
+                req.Content = form;
+            }
+            using var resp = await Http.SendAsync(req);
+            if (resp.IsSuccessStatusCode) return;
+            string body = await resp.Content.ReadAsStringAsync();
+            if ((int)resp.StatusCode == 429)
+            {
+                double wait = 2;
+                try { wait = JsonDocument.Parse(body).RootElement.GetProperty("retry_after").GetDouble(); } catch { }
+                await Task.Delay(TimeSpan.FromSeconds(Math.Min(wait + 0.25, 30)));
+                continue;
+            }
+            throw new Exception(resp.StatusCode == HttpStatusCode.Forbidden
+                ? "The bot can't post in that channel - give it the Send Messages and Attach Files permissions there."
+                : $"Discord error {(int)resp.StatusCode} while replying.");
+        }
+        throw new Exception("Discord is rate-limiting replies - try again in a moment.");
+    }
+
     async Task<string> GetAsync(string url)
     {
         for (int attempt = 0; attempt < 3; attempt++)

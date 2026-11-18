@@ -47,6 +47,22 @@ public class AppConfig
     public List<string> InstanceOrder { get; set; } = new();   // account names, in the order you dragged them
     public bool AutoUpdate { get; set; } = true;
 
+    // Phone control: commands typed in Discord
+    public bool DiscordCommands { get; set; }
+    public string DiscordCommandUsers { get; set; } = "";       // Discord user IDs allowed to send commands
+    public string DiscordCommandChannelId { get; set; } = "";   // empty = the webhook channel
+
+    // Low-end mode: allowlisted graphics flags + Roblox's own settings file, applied before each launch
+    public bool LowGfx { get; set; }
+    public bool LowGfxQuality { get; set; } = true;
+    public bool LowGfxTextures { get; set; } = true;
+    public bool LowGfxGrass { get; set; } = true;
+    public bool LowGfxSky { get; set; } = true;
+    public bool LowGfxDetail { get; set; } = true;
+    public bool LowGfxLighting { get; set; }
+    public bool LowGfxMute { get; set; } = true;
+    public Dictionary<string, string> RobloxSettingsBackup { get; set; } = new();   // values from before MultiBlox changed them
+
     public List<Account> Accounts { get; set; } = new();
     public string PlaceId { get; set; } = "";
     public string JobId { get; set; } = "";

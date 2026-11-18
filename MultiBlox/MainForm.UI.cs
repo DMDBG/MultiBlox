@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 
 namespace MultiBlox;
 
@@ -45,7 +45,7 @@ public partial class MainForm
         AddPage("instances", "Instances & Viewer", "Every Roblox window that's open right now - drag rows to reorder", "", BuildInstancesPage());
         AddPage("discord", "Discord Stats", "Wins, losses and drops from your macro's webhooks", "", BuildDiscordPage());
         AddPage("afk", "Anti-AFK & Saver", "Stay in game while away, and keep your PC cool", "", BuildAfkSaverPage());
-        AddPage("fps", "FPS Editor", "Set the frame-rate cap Roblox launches with", "", BuildFpsPage());
+        AddPage("fps", "FPS & Graphics", "Frame-rate cap and low-end graphics for the games you launch", "", BuildFpsPage());
         ResumeLayout(false);
         PerformLayout();
 
@@ -342,7 +342,7 @@ public partial class MainForm
         // Launch settings
         var settings = new Card(FlowDirection.LeftToRight) { Dock = DockStyle.Top, Margin = new Padding(0) };
         txtPlace = new TextBox { Text = cfg.PlaceId, PlaceholderText = "e.g. 920587237" };
-        txtJob = new TextBox { Text = cfg.JobId, PlaceholderText = "Optional - Job ID or private server link" };
+        txtJob = new TextBox { Text = cfg.JobId, PlaceholderText = "Optional - Job ID, private server link or @username" };
         numDelay = Num(3, 120, cfg.LaunchDelaySec);
         settings.Controls.Add(Labeled("Place ID", Field(txtPlace, 180)));
         settings.Controls.Add(Labeled("Server", Field(txtJob, 300)));
@@ -363,6 +363,7 @@ public partial class MainForm
             {
                 AddAccountButton(),
                 Btn("Set place", (_, _) => SetPlaceOverride()),
+                Btn("Join a user", async (_, _) => await JoinUserPrompt()),
                 Btn("Remove", (_, _) => RemoveAccounts(), BtnKind.Danger)
             },
             new Control[] { bLaunchSel, bLaunchChk });
@@ -378,6 +379,7 @@ public partial class MainForm
         lvAccounts.DoubleClick += (_, _) => SetPlaceOverride();
         lvAccounts.ContextMenuStrip = DarkMenu(
             ("▶  Launch", async () => await LaunchMany(SelectedAccounts())),
+            ("Join a user...", async () => await JoinUserPrompt()),
             ("Set place override", SetPlaceOverride),
             ("Check all cookies", async () => await CheckCookies()),
             ("Remove", RemoveAccounts));
@@ -522,7 +524,8 @@ public partial class MainForm
 
         var cap = new Card();
         cap.Controls.Add(H("Frame-rate cap"));
-        cap.Controls.Add(Note("Pick a target, then Apply. Every Roblox window you launch afterwards uses it."));
+        cap.Controls.Add(Note("Pick a target, then Apply. Every Roblox window you launch afterwards uses it. " +
+                              "MultiBlox sets Roblox's own “Maximum Frame Rate” setting for you."));
         numFps = Num(5, 9999, cfg.FpsCap);
         cap.Controls.Add(Row(
             Labeled("Target FPS", Field(numFps, 110)),
@@ -557,6 +560,7 @@ public partial class MainForm
             "and Roblox's anti-cheat flags it, which could get your accounts banned."));
 
         page.Controls.Add(cap);
+        page.Controls.Add(BuildLowGfxCard());
         page.Controls.Add(live);
         return page;
     }
